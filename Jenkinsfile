@@ -1,39 +1,51 @@
 pipeline {
     agent any
 
-    stages {
-        
-          stage('SCM') {
-            checkout scm
-          }
-            
-          stage('SonarQube Analysis') {
-            def mvn = tool 'Default Maven';
-            withSonarQubeEnv() {
-              sh "${mvn}/bin/mvn clean verify sonar:sonar -Dsonar.projectKey=con-jenkins -Dsonar.projectName='con-jenkins'"
-            }
-          }
+    tools {
+        maven 'Maven3'
+    }
 
+    environment {
+        GIT_REPO = 'https://github.com/ajacdev/demo-app.git'
+        GIT_BRANCH = 'main'
+        scannerHome = tool 'Sonar'
+        SONAR_PROJECT_KEY = 'demo-app-sonar'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: "${GIT_BRANCH}", url: "${GIT_REPO}"
+            }
+        }
         stage('Build') {
             steps {
-                echo 'Building...'
-                // Aquí puedes agregar tus comandos de compilación, por ejemplo:
-                // sh 'mvn clean install'
+                sh 'mvn clean install'
             }
         }
         stage('Test') {
             steps {
-                echo 'Testing...'
-                // Aquí puedes agregar tus comandos de prueba, por ejemplo:
-                // sh 'mvn test'
+                sh 'mvn test'
             }
         }
-        stage('Deploy') {
+        stage('SonarQube Analysis') {
             steps {
-                echo 'Deploying...'
-                // Aquí puedes agregar tus comandos de despliegue, por ejemplo:
-                // sh 'kubectl apply -f deployment.yaml'
+                script {
+                    def scannerHome = tool 'Sonar'
+                    withSonarQubeEnv('Sonar') {
+                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=${SONAR_PROJECT_KEY}"
+                    }
+                }
+            }
+        }
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 1, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
             }
         }
     }
+
 }
+
